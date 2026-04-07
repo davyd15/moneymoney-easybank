@@ -1,0 +1,7 @@
+.DS_Store
+CLAUDE.md
+.claude/
+moneymoney-api.md
+*.har
+*.swp
+*.bak
