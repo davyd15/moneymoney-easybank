@@ -310,7 +310,7 @@ end
 local CONFIRM_OTP_PROMPT = {
   title     = "SMS TAN anfordern?",
   challenge = "Für den vollständigen Kreditkartenverlauf ist eine SMS TAN erforderlich.\n\n"
-            .. "Klicken Sie auf „Fertig", um die SMS jetzt zu senden\n"
+            .. "Klicken Sie auf Fertig, um die SMS jetzt zu senden\n"
             .. "(verhindert gleichzeitige SMS-Anfragen bei einem Rundruf).",
   label     = "Bestätigung",
 }
