@@ -1,8 +1,11 @@
 -- ============================================================
 -- MoneyMoney Web Banking Extension
 -- EasyBank DE – banking.easybank.de
--- Version: 3.7.0
+-- Version: 3.7.1
 --
+-- Changes in 3.7.1:
+--  - All dialog and status texts translated to German
+--  - Stale OTP state is now cleared at the start of each new login (Step 1)
 -- Changes in 3.7.0:
 --  - Confirmation prompt before SMS OTP is sent – prevents simultaneous OTP flood on multi-account refresh
 -- Changes in 3.6.4:
@@ -18,7 +21,7 @@
 local BASE_URL = "https://banking.easybank.de"
 
 WebBanking {
-  version     = 3.70,
+  version     = 3.71,
   country     = "de",
   url         = BASE_URL,
   services    = {"easybank DE"},
@@ -305,18 +308,18 @@ local function buildTxBody(accJson, startDate, endDate, pageIndex, currency, tan
 end
 
 local CONFIRM_OTP_PROMPT = {
-  title     = "Request SMS TAN?",
-  challenge = "Loading the full credit card history requires an SMS TAN.\n\n"
-            .. "Please confirm to send the SMS now\n"
-            .. "(to avoid all accounts triggering an SMS at the same time).",
-  label     = "Confirm (any input)",
+  title     = "SMS TAN anfordern?",
+  challenge = "Für den vollständigen Kreditkartenverlauf ist eine SMS TAN erforderlich.\n\n"
+            .. "Klicken Sie auf „Fertig", um die SMS jetzt zu senden\n"
+            .. "(verhindert gleichzeitige SMS-Anfragen bei einem Rundruf).",
+  label     = "Bestätigung",
 }
 
 local OTP_PROMPT = {
-  title     = "SMS TAN for credit card transactions",
-  challenge = "An SMS TAN has been sent to your mobile phone.\n\n"
-            .. "Please enter the TAN to load the full\n"
-            .. "credit card transaction history:",
+  title     = "SMS TAN für Kreditkartenumsätze",
+  challenge = "Eine SMS TAN wurde an Ihr Mobiltelefon gesendet.\n\n"
+            .. "Bitte geben Sie die TAN ein, um den vollständigen\n"
+            .. "Kreditkartenverlauf zu laden:",
   label     = "SMS TAN",
 }
 
@@ -334,6 +337,13 @@ function InitializeSession2(protocol, bankCode, step, credentials, interactive)
     if not username or username == "" or not password or password == "" then
       return LoginFailed
     end
+
+    -- Clear any stale OTP state from a previous session
+    LocalStorage.cardAccNum        = nil
+    LocalStorage.startDate         = nil
+    LocalStorage.endDate           = nil
+    LocalStorage.otpTries          = nil
+    LocalStorage.otpConfirmPending = nil
 
     local html = connection:get(BASE_URL .. "/Login")
     uniqueKey = (html or ""):match("VeriBranch%.Config%.UniqueKey%s*=%s*'([^']+)'") or ""
@@ -384,7 +394,7 @@ function InitializeSession2(protocol, bankCode, step, credentials, interactive)
     end
 
     if LocalStorage.historyLoaded == "yes" then
-      MM.printStatus("Login successful.")
+      MM.printStatus("Anmeldung erfolgreich.")
       return nil
     end
 
@@ -397,7 +407,7 @@ function InitializeSession2(protocol, bankCode, step, credentials, interactive)
     end
 
     if not cardAcc then
-      MM.printStatus("Login successful.")
+      MM.printStatus("Anmeldung erfolgreich.")
       return nil
     end
 
@@ -428,7 +438,7 @@ function InitializeSession2(protocol, bankCode, step, credentials, interactive)
       LocalStorage.historyLoaded = "yes"
     end
 
-    MM.printStatus("Login successful.")
+    MM.printStatus("Anmeldung erfolgreich.")
     return nil
   end
 
@@ -438,7 +448,7 @@ function InitializeSession2(protocol, bankCode, step, credentials, interactive)
 
     local cardAccNum = LocalStorage.cardAccNum
     if not cardAccNum or cardAccNum == "" then
-      MM.printStatus("Login successful.")
+      MM.printStatus("Anmeldung erfolgreich.")
       return nil
     end
 
@@ -450,7 +460,7 @@ function InitializeSession2(protocol, bankCode, step, credentials, interactive)
       return OTP_PROMPT
     end
 
-    MM.printStatus("Login successful.")
+    MM.printStatus("Anmeldung erfolgreich.")
     return nil
   end
 
@@ -460,7 +470,7 @@ function InitializeSession2(protocol, bankCode, step, credentials, interactive)
 
     local cardAccNum = LocalStorage.cardAccNum
     if not cardAccNum or cardAccNum == "" then
-      MM.printStatus("Login successful.")
+      MM.printStatus("Anmeldung erfolgreich.")
       return nil
     end
 
@@ -475,7 +485,7 @@ function InitializeSession2(protocol, bankCode, step, credentials, interactive)
     end
 
     if not cardAcc then
-      MM.printStatus("Credit card not found – login OK.")
+      MM.printStatus("Kreditkarte nicht gefunden – Anmeldung OK.")
       return nil
     end
 
@@ -483,7 +493,7 @@ function InitializeSession2(protocol, bankCode, step, credentials, interactive)
     tan = tan:match("^%s*(.-)%s*$") or ""
 
     if tan == "" then
-      return { title = "TAN required", challenge = "Please enter the SMS TAN:", label = "SMS TAN" }
+      return { title = "TAN erforderlich", challenge = "Bitte geben Sie die SMS TAN ein:", label = "SMS TAN" }
     end
 
     local accJson = buildAccountJson(cardAcc)
@@ -500,13 +510,13 @@ function InitializeSession2(protocol, bankCode, step, credentials, interactive)
       if tries >= 3 then
         LocalStorage.otpTries   = nil
         LocalStorage.cardAccNum = nil
-        MM.printStatus("TAN incorrect 3 times – login without full history.")
+        MM.printStatus("TAN dreimal falsch – Anmeldung ohne vollständigen Verlauf.")
         return nil
       end
 
       return {
-        title     = string.format("Invalid TAN (%d/3)", tries),
-        challenge = "The TAN is invalid or expired.\n\nPlease enter the SMS TAN again:",
+        title     = string.format("Ungültige TAN (%d/3)", tries),
+        challenge = "Die TAN ist ungültig oder abgelaufen.\n\nBitte geben Sie die SMS TAN erneut ein:",
         label     = "SMS TAN",
       }
     end
@@ -515,7 +525,7 @@ function InitializeSession2(protocol, bankCode, step, credentials, interactive)
     LocalStorage.otpTries      = nil
     LocalStorage.cardAccNum    = nil
 
-    MM.printStatus("Transaction history confirmed.")
+    MM.printStatus("Umsatzhistorie bestätigt.")
     return nil
   end
 
@@ -596,7 +606,7 @@ function RefreshAccount(account, since)
   -- Full 360-day history on first run for credit cards (flag is per-account)
   local cardHistoryKey = "cardHistoryLoaded_" .. (accData["Number"] or "")
   if isCard and LocalStorage[cardHistoryKey] ~= "yes" then
-    MM.printStatus("Loading full credit card history...")
+    MM.printStatus("Lade vollständigen Kreditkartenverlauf...")
 
     local allTransactions = {}
     local pageIndex       = 0
@@ -611,7 +621,7 @@ function RefreshAccount(account, since)
       ))
 
       if not txData then
-        MM.printStatus("Error loading page " .. (pageIndex + 1))
+        MM.printStatus("Fehler beim Laden von Seite " .. (pageIndex + 1))
         allPagesOk = false
         break
       end
@@ -619,7 +629,7 @@ function RefreshAccount(account, since)
       local txItem = txData["Item"] or txData
 
       if txItem["OTPRequired"] == true then
-        MM.printStatus("OTP required – resetting for next login.")
+        MM.printStatus("OTP erforderlich – wird beim nächsten Login erneut angefordert.")
         LocalStorage.historyLoaded       = nil
         LocalStorage[cardHistoryKey]     = nil
         return { balance = getBalance(accData, true), transactions = {} }
@@ -630,7 +640,7 @@ function RefreshAccount(account, since)
         allTransactions[#allTransactions + 1] = tx
       end
 
-      MM.printStatus(string.format("Page %d: %d transactions loaded", pageIndex + 1, #allTransactions))
+      MM.printStatus(string.format("Seite %d: %d Umsätze geladen", pageIndex + 1, #allTransactions))
 
       if txItem["HasMore"] ~= true then break end
       pageIndex = pageIndex + 1
@@ -672,14 +682,14 @@ function RefreshAccount(account, since)
     ))
 
     if not txData then
-      MM.printStatus("No transaction data: " .. (account.accountNumber or "?"))
+      MM.printStatus("Keine Umsatzdaten: " .. (account.accountNumber or "?"))
       break
     end
 
     local txItem = txData["Item"] or txData
 
     if txItem["OTPRequired"] == true then
-      MM.printStatus("OTP required – resetting for next login.")
+      MM.printStatus("OTP erforderlich – wird beim nächsten Login erneut angefordert.")
       LocalStorage.historyLoaded   = nil
       LocalStorage[cardHistoryKey] = nil
       return { balance = getBalance(accData, isCard), transactions = {} }
